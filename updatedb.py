@@ -11,8 +11,9 @@ TIME_FMT = '%d %B %Y'
 
 if 'last-updated-local.txt' in os.listdir():
     with open('last-updated-local.txt') as f:
-        if len(f.read())>0:
-            last_updated_local = datetime.strptime(f.read().strip(), TIME_FMT)
+        content = f.read()
+        if len(content)>0:
+            last_updated_local = datetime.strptime(content.strip(), TIME_FMT)
         else: 
             last_updated_local = datetime.fromtimestamp(0)
 else: 
@@ -62,21 +63,27 @@ for i in range(len(res.description)):
         print(res.description[i][0])
     else: print(res.description[i][0], end=', ')
 
-
 cursor.execute('''
-    create table CountUnique(
-    name text primary key,
-    ncount integer
-    );''')
+    create table CountUnique (
+        id integer primary key autoincrement,
+        name text,
+        ncount integer
+    )
+''')
+db_conn.commit()
 
 unique_vals = drugs.nunique()
+#print(unique_vals)
+
 newtables = []
 for name in unique_vals.index:
-    count = unique_vals[name]
+    count = int(unique_vals[name])
+#    print(type(count))
     cursor.execute('''
         insert into CountUnique (name, ncount)
-        values (?,?);
-    ''',(name, count))
+        values(?, ?)
+    ''', (name, count))
+    db_conn.commit()
     if count < drugs.shape[0]/2:
         newtables.append(name)
 
@@ -87,11 +94,12 @@ for name in newtables:
             create table {tablename} (
             id integer primary key autoincrement,
             prop_name text
-        );''')
+        )''')
     cursor.execute(f'''
         insert into {tablename} (prop_name)
         select distinct {name} from Drugs;
     ''')
+    db_conn.commit()
 
 with open('last-updated-local.txt','w') as f:
     f.write(datetime.strftime(datetime.now(), '%d %B %Y'))
