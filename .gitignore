@@ -1,2 +1,3 @@
 flaskserve.py
 *.db
+*.xlsx
