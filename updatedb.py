@@ -50,12 +50,77 @@ drugs = drugs.rename(columns = {x : '_'.join(x.lower().split(' ')) for x in drug
 drugs = drugs.rename(columns = {'generic_name': 'generic', 'brand_name':'brand', 'name_of_the_manufacturer':'mfg','dosage_description':'dosage'})
 drugs = drugs[drugs.use_for=="Human"].drop(columns=['use_for'])
 
+mfg = list(drugs.mfg.unique())
+mfg = {m:mfg.index(m) for m in mfg}
+drugs.mfg = [mfg[m] for m in drugs.mfg]
+
+generic = list(drugs.generic.unique())
+generic = {g:generic.index(g) for g in generic}
+drugs.generic = [generic[g] for g in drugs.generic]
+
+dosage = list(drugs.dosage.unique())
+dosage = {d:dosage.index(d) for d in dosage}
+drugs.dosage = [dosage[d] for d in drugs.dosage]
+
+strength = list(drugs.strength.unique())
+strength = {s:strength.index(s) for s in strength}
+drugs.strength = [strength[s] for s in drugs.strength]
+
+price = list(drugs.price.unique())
+price = {p:price.index(p) for p in price}
+drugs.price = [price[p] for p in drugs.price]
+
+tables = {'Mfg':mfg, 'Generic':generic, 'Strength':strength, 'Dosage':dosage, 'Price':price}
+
+
 
 print('Creating sqlite3 database...')
-db_conn = sqlite3.connect('drugs-2.db')
-drugs.to_sql(name='Drugs', con=db_conn)
+db_conn = sqlite3.connect(sys.argv[1])
 
 cursor = db_conn.cursor()
+
+for tb in tables:
+    cursor.execute(f'''
+        create table {tb} (
+            id integer primary key autoincrement,
+            prop_val text
+        );
+    ''')
+    db_conn.commit()
+
+for tb in tables:
+    for val in tables[tb]:
+        cursor.execute(f'''
+            insert into {tb} (prop_val) values ("{val}")
+        ''')
+        db_conn.commit()
+
+schema = '''
+    create table Drugs(
+        id integer primary key autoincrement,
+        sl integer,
+        mfg integer,
+        brand text,
+        generic integer,
+        strength integer,
+        dosage integer,
+        price integer,
+        dar text,
+        foreign key (mfg)
+            references Mfg (id),
+        foreign key (generic)
+            references Generic (id),
+        foreign key (strength)
+            references Strength (id),
+        foreign key (dosage)
+            references Dosage (id),
+        foreign key (price)
+            references Price (id)
+)'''
+
+drugs.to_sql('Drugs', db_conn, schema=schema)
+
+
 res = cursor.execute('select * from Drugs')
 print('Reading database...')
 for i in range(len(res.description)):
@@ -74,8 +139,6 @@ db_conn.commit()
 
 unique_vals = drugs.nunique()
 #print(unique_vals)
-
-newtables = []
 for name in unique_vals.index:
     count = int(unique_vals[name])
 #    print(type(count))
@@ -83,22 +146,6 @@ for name in unique_vals.index:
         insert into CountUnique (name, ncount)
         values(?, ?)
     ''', (name, count))
-    db_conn.commit()
-    if count < drugs.shape[0]/2:
-        newtables.append(name)
-
-print(newtables)
-for name in newtables:
-    tablename = name[0].upper()+name[1:]
-    cursor.execute(f'''
-            create table {tablename} (
-            id integer primary key autoincrement,
-            prop_name text
-        )''')
-    cursor.execute(f'''
-        insert into {tablename} (prop_name)
-        select distinct {name} from Drugs;
-    ''')
     db_conn.commit()
 
 with open('last-updated-local.txt','w') as f:
