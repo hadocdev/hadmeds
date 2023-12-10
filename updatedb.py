@@ -88,7 +88,6 @@ price = list(drugs.price.unique())
 price = {p:price.index(p) for p in price}
 drugs.price = [price[p] for p in drugs.price]
 
-tables = {'Mfg':mfg, 'Generic':generic, 'Strength':strength, 'Dosage':dosage, 'Price':price}
 
 
 # Fetching the indications and contraindications
@@ -104,11 +103,14 @@ db_conn = sqlite3.connect(sys.argv[1])
 
 cursor = db_conn.cursor()
 
+
+tables = {'Mfg':mfg, 'Generic':generic, 'Strength':strength, 'Dosage':dosage, 'Price':price}
+
 for tb in tables:
     cursor.execute(f'''
         create table {tb} (
             id integer primary key,
-            prop_val text
+            {tb.lower()} text
         );
     ''')
     db_conn.commit()
@@ -116,7 +118,7 @@ for tb in tables:
 for tb in tables:
     for val in tables[tb]:
         cursor.execute(f'''
-            insert into {tb} (id, prop_val) values (?,?)
+            insert into {tb} (id, {tb.lower()}) values (?,?)
         ''', (tables[tb][val], val))
         db_conn.commit()
 
@@ -185,13 +187,13 @@ cursor.execute('''
 cursor.execute('''
     create table Indications (
         id integer,
-        ind text
+        name text
     )
 ''')
 cursor.execute('''
     create table Contraindications (
         id integer,
-        con text
+        name text
     )
 ''')
 
@@ -199,7 +201,7 @@ db_conn.commit()
 
 for gen in generic:
     cursor.execute('''
-        insert into Indications_Contraindications (id, indic, contra)
+        insert into Indications_Contraindications (id, indication, contraindication)
         values (?, ?, ?)
     ''', (generic[gen], encoded_inds[gen], encoded_cons[gen]))
 db_conn.commit()
@@ -211,7 +213,7 @@ for code in codex:
     table = (prop[0].upper() + prop[1:])+suffix
     for indcon in codex[code]:
         cursor.execute(f'''
-            insert into {table} (id, {prop})
+            insert into {table} (id, name)
             values (?, ?)
         ''', (codex[code][indcon], indcon))
         db_conn.commit()
