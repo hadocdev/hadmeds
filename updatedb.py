@@ -3,9 +3,26 @@ import sqlite3
 import pandas as pd
 import os, sys
 from datetime import datetime
+from indications import *
+
+def get_ind_con(drug):
+    response = requests.get(url, params={'drugName':drug, 'relas':'may_treat ci_with'})
+    if response.ok and response.text != '{}':
+        results = json.loads(response.text)['rxclassDrugInfoList']['rxclassDrugInfo']
+        indics, contra = [], []
+        for i, row in enumerate(results):
+            if row['rela'] == 'may_treat':
+                indics.append(row['rxclassMinConceptItem']['className'])
+            else:
+                contra.append(row['rxclassMinConceptItem']['className'])
+        return indics, contra
+    else:
+        return None
+
 
 URL_BROWSE = 'https://dgdagov.info/index.php/registered-products/allopathic'
 URL_EXCEL = 'https://dgdagov.info/administrator/components/com_jcode/source/ExcelRegisterProduct.php'
+URL_IND_CON = 'https://rxnav.nlm.nih.gov/REST/rxclass/class/byDrugName.json'
 
 TIME_FMT = '%d %B %Y'
 
@@ -49,6 +66,7 @@ print('Processing Excel for writing into database...')
 drugs = drugs.rename(columns = {x : '_'.join(x.lower().split(' ')) for x in drugs.columns})
 drugs = drugs.rename(columns = {'generic_name': 'generic', 'brand_name':'brand', 'name_of_the_manufacturer':'mfg','dosage_description':'dosage'})
 drugs = drugs[drugs.use_for=="Human"].drop(columns=['use_for'])
+drugs = drugs.drop(columns=['#sl'])
 
 mfg = list(drugs.mfg.unique())
 mfg = {m:mfg.index(m) for m in mfg}
@@ -73,6 +91,13 @@ drugs.price = [price[p] for p in drugs.price]
 tables = {'Mfg':mfg, 'Generic':generic, 'Strength':strength, 'Dosage':dosage, 'Price':price}
 
 
+# Fetching the indications and contraindications
+print("Fetching indications database...")
+inds, cons = all_ind_con(generic.keys())
+code_inds, code_cons = encode_ind_con(inds, cons)
+encoded_inds = {gen: ' '.join([f"{code_inds[ind]}" for ind in inds[gen]]) for gen in inds}
+encoded_cons = {gen: ' '.join([f"{code_cons[con]}" for con in cons[gen]]) for gen in cons}
+
 
 print('Creating sqlite3 database...')
 db_conn = sqlite3.connect(sys.argv[1])
@@ -82,7 +107,7 @@ cursor = db_conn.cursor()
 for tb in tables:
     cursor.execute(f'''
         create table {tb} (
-            id integer primary key autoincrement,
+            id integer primary key,
             prop_val text
         );
     ''')
@@ -91,14 +116,13 @@ for tb in tables:
 for tb in tables:
     for val in tables[tb]:
         cursor.execute(f'''
-            insert into {tb} (prop_val) values ("{val}")
-        ''')
+            insert into {tb} (id, prop_val) values (?,?)
+        ''', (tables[tb][val], val))
         db_conn.commit()
 
 schema = '''
     create table Drugs(
         id integer primary key autoincrement,
-        sl integer,
         mfg integer,
         brand text,
         generic integer,
@@ -147,6 +171,50 @@ for name in unique_vals.index:
         values(?, ?)
     ''', (name, count))
     db_conn.commit()
+
+
+# Adding indications and contraindications to the DB
+cursor.execute('''
+    create table IndsCons (
+        id integer,
+        indic text,
+        contra text
+    )
+''')
+
+cursor.execute('''
+    create table EncInd (
+        id integer,
+        ind text
+    )
+''')
+cursor.execute('''
+    create table EncCon (
+        id integer,
+        con text
+    )
+''')
+
+db_conn.commit()
+
+for gen in generic:
+    cursor.execute('''
+        insert into IndsCons (id, indic, contra)
+        values (?, ?, ?)
+    ''', (generic[gen], encoded_inds[gen], encoded_cons[gen]))
+db_conn.commit()
+
+codex = {'code_inds':code_inds, 'code_cons':code_cons}
+for code in codex:
+    prop = ('ind' if code == 'code_inds' else 'con')
+    table = 'Enc' + (prop[0].upper() + prop[1:])
+    for indcon in codex[code]:
+        cursor.execute(f'''
+            insert into {table} (id, {prop})
+            values (?, ?)
+        ''', (codex[code][indcon], indcon))
+        db_conn.commit()
+
 
 with open('last-updated-local.txt','w') as f:
     f.write(datetime.strftime(datetime.now(), '%d %B %Y'))
