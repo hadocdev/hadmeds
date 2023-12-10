@@ -208,7 +208,7 @@ codex = {'code_inds':code_inds, 'code_cons':code_cons}
 for code in codex:
     prop = ('ind' if code == 'code_inds' else 'con')
     suffix = ('' if code=='code_inds' else 'traind') +'ications'
-    table = (prop[0].upper() + prop[1:])
+    table = (prop[0].upper() + prop[1:])+suffix
     for indcon in codex[code]:
         cursor.execute(f'''
             insert into {table} (id, {prop})
