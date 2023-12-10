@@ -175,21 +175,21 @@ for name in unique_vals.index:
 
 # Adding indications and contraindications to the DB
 cursor.execute('''
-    create table IndsCons (
+    create table Indications_Contraindications (
         id integer,
-        indic text,
-        contra text
+        indication text,
+        contraindication text
     )
 ''')
 
 cursor.execute('''
-    create table EncInd (
+    create table Indications (
         id integer,
         ind text
     )
 ''')
 cursor.execute('''
-    create table EncCon (
+    create table Contraindications (
         id integer,
         con text
     )
@@ -199,7 +199,7 @@ db_conn.commit()
 
 for gen in generic:
     cursor.execute('''
-        insert into IndsCons (id, indic, contra)
+        insert into Indications_Contraindications (id, indic, contra)
         values (?, ?, ?)
     ''', (generic[gen], encoded_inds[gen], encoded_cons[gen]))
 db_conn.commit()
@@ -207,7 +207,8 @@ db_conn.commit()
 codex = {'code_inds':code_inds, 'code_cons':code_cons}
 for code in codex:
     prop = ('ind' if code == 'code_inds' else 'con')
-    table = 'Enc' + (prop[0].upper() + prop[1:])
+    suffix = ('' if code=='code_inds' else 'traind') +'ications'
+    table = (prop[0].upper() + prop[1:])
     for indcon in codex[code]:
         cursor.execute(f'''
             insert into {table} (id, {prop})
