@@ -52,6 +52,7 @@ if lastmod < last_updated_local:
     print(f'Current time: {datetime.strftime(datetime.now(),"%d %B %Y, %T")}')
     sys.exit()
 
+print('Buckle up, it\'s going to take a while.\nEstimated completion time: 45 mins.')
 print('Fetching data...')
 res = requests.get(URL_EXCEL, params={'action':'excelforDugDatabase', 'curSearch':'', 'FilterAll':'4', 'FilterItem': ''})
 
